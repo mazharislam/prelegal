@@ -1,0 +1,202 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-desk: #1e222a;
+  --color-desk-raised: #262b34;
+  --color-desk-line: #363c47;
+  --color-paper: #fbfaf7;
+  --color-ink: #14171c;
+  --color-ink-soft: #5b6270;
+  --color-chalk: #e6e8ec;
+  --color-chalk-soft: #99a1b0;
+  --color-marker: #f6e07f;
+  --color-pencil: #b4342a;
+  --font-document: var(--font-source-serif), Georgia, serif;
+  --font-ui: var(--font-plex-sans), system-ui, sans-serif;
+  --font-utility: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-desk);
+  color: var(--color-chalk);
+  font-family: var(--font-ui);
+}
+
+/* Focus is not decoration here — it drives the cross-reference highlight. */
+:focus-visible {
+  outline: 2px solid var(--color-marker);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- document */
+
+/*
+ * The sheet is sized in inches, not pixels: it is a US Letter page, so what you
+ * see on screen is what the print dialog lays out.
+ */
+.sheet {
+  width: 8.5in;
+  min-height: 11in;
+  padding: 0.9in 0.85in;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-document);
+  font-size: 10.5pt;
+  line-height: 1.62;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.4),
+    0 18px 50px -12px rgb(0 0 0 / 0.55);
+}
+
+/*
+ * A Letter page is wider than a phone, and shrinking it to fit makes the text
+ * unreadable. Below the split layout the sheet reflows to the screen instead.
+ * Print is unaffected — @page supplies the real page geometry.
+ */
+@media screen and (max-width: 1023px) {
+  .sheet {
+    width: 100%;
+    min-height: 0;
+    padding: 1.75rem 1.5rem;
+    font-size: 11pt;
+  }
+}
+
+.sheet-title {
+  font-size: 19pt;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+/* Section headings on the cover page and above the standard terms. */
+.sheet-eyebrow {
+  font-family: var(--font-utility);
+  font-size: 7.5pt;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+}
+
+.sheet-prose {
+  text-align: justify;
+  hyphens: auto;
+}
+
+.sheet-rule {
+  border: 0;
+  border-top: 1px solid #d8d4cb;
+}
+
+/*
+ * A cross-reference to the cover page. The dotted underline says "this term is
+ * defined elsewhere"; the marker wash appears when the form is sitting on the
+ * value behind it.
+ */
+.xref {
+  border-bottom: 1px dotted #a9a396;
+  border-radius: 2px;
+  padding: 0 1px;
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+/* An answer the user has supplied, shown in the document. */
+.filled {
+  border-radius: 2px;
+  padding: 0 1px;
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+/* The marker wash: the one moment of colour in an otherwise black-and-white page. */
+.lit {
+  background: var(--color-marker);
+  box-shadow: 0 0 0 2px var(--color-marker);
+}
+
+/* An answer still owed. Reads like a blank on a paper contract. */
+.blank {
+  font-family: var(--font-utility);
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-pencil);
+  border-bottom: 1.5px solid var(--color-pencil);
+  padding: 0 0.35em;
+  white-space: nowrap;
+}
+
+.signature-line {
+  border-bottom: 1px solid #b9b3a7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xref,
+  .filled {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------- print */
+
+@page {
+  size: letter;
+  margin: 0.9in 0.85in;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  /* Unwind the app shell so the sheet is the only thing on the page. */
+  .app-shell,
+  .preview-pane {
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  /* @page now supplies the margins, so the sheet drops its own. */
+  .sheet {
+    width: auto;
+    min-height: 0;
+    padding: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+
+  /* Highlighting is a drafting aid, not part of the agreement. */
+  .lit {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .xref {
+    border-bottom: 0;
+  }
+
+  .page-break {
+    break-before: page;
+  }
+
+  .clause,
+  .signature-block {
+    break-inside: avoid;
+  }
+}
