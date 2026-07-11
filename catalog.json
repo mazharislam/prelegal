@@ -1,0 +1,66 @@
+{
+  "source": "https://github.com/CommonPaper",
+  "description": "Catalog of Common Paper standard legal agreement templates (Markdown) collected in the templates/ directory. Each template is a modifiable legal agreement the prelegal system can adapt for the user.",
+  "templates": [
+    {
+      "name": "Mutual Non-Disclosure Agreement — Cover Page",
+      "description": "Fillable cover page for the Common Paper Mutual NDA. Captures party details and negotiable options and incorporates the Mutual NDA Standard Terms.",
+      "filename": "Mutual-NDA-coverpage.md"
+    },
+    {
+      "name": "Mutual Non-Disclosure Agreement — Standard Terms",
+      "description": "Standard terms for a mutual NDA, letting each party disclose and protect confidential information for a defined purpose.",
+      "filename": "Mutual-NDA.md"
+    },
+    {
+      "name": "Cloud Service Agreement",
+      "description": "Terms for providing access to and use of a cloud (SaaS) service, including subscriptions, support, and order forms.",
+      "filename": "CSA.md"
+    },
+    {
+      "name": "Design Partner Agreement",
+      "description": "Terms for an early-access design partner program in which a partner uses a pre-release product and provides feedback.",
+      "filename": "design-partner-agreement.md"
+    },
+    {
+      "name": "Service Level Agreement",
+      "description": "Uptime commitments, availability calculations, and remedies for a cloud service.",
+      "filename": "sla.md"
+    },
+    {
+      "name": "Professional Services Agreement",
+      "description": "Terms for delivering professional services under statements of work (SOWs).",
+      "filename": "psa.md"
+    },
+    {
+      "name": "Data Processing Agreement",
+      "description": "Data protection terms governing the processing of personal data, defining processor and subprocessor relationships.",
+      "filename": "DPA.md"
+    },
+    {
+      "name": "Software License Agreement",
+      "description": "License terms for installing and using software on customer-controlled systems for permitted uses.",
+      "filename": "Software-License-Agreement.md"
+    },
+    {
+      "name": "Partnership Agreement",
+      "description": "Mutual cooperation terms setting out each party's obligations in a business partnership.",
+      "filename": "Partnership-Agreement.md"
+    },
+    {
+      "name": "Pilot Agreement",
+      "description": "Trial and evaluation terms allowing a customer to access a product for evaluation purposes during a pilot period.",
+      "filename": "Pilot-Agreement.md"
+    },
+    {
+      "name": "Business Associate Agreement",
+      "description": "HIPAA business associate terms governing the use and disclosure of protected health information (PHI).",
+      "filename": "BAA.md"
+    },
+    {
+      "name": "AI Addendum",
+      "description": "Addendum governing the use of AI services and features, covering input/output, restrictions, and responsibilities.",
+      "filename": "AI-Addendum.md"
+    }
+  ]
+}
