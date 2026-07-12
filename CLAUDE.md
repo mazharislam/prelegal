@@ -112,11 +112,15 @@ The prototype's NDA screens use a dark "desk" palette (see `frontend/src/app/glo
 | `backend/app/config.py` | Paths read lazily from the environment, so tests can redirect them |
 | `backend/app/database.py` | Plain `sqlite3`; one table, so no ORM |
 | `backend/app/dependencies.py` | `get_db` (one connection per request), `get_current_user` (cookie) |
+| `backend/app/models.py` | Request and response models |
 | `backend/app/routes/auth.py` | The fake login |
 | `backend/app/routes/static.py` | Mounts the frontend export at `/` |
 | `frontend/src/lib/api.ts` | API client; `ApiError` carries the HTTP status |
+| `frontend/src/lib/nda.ts` | The document values, how they read, and `applyUpdates` |
+| `frontend/src/components/ChatPanel.tsx` | The interview |
+| `frontend/src/components/NdaDocument.tsx` | The rendered agreement, and the PDF via print |
 | `frontend/src/components/LoginScreen.tsx` | The login screen |
-| `frontend/src/app/page.tsx` | Session gate, wrapping the unchanged NDA desk |
+| `frontend/src/app/page.tsx` | Session gate; the chat and the document side by side |
 
 ### Things worth knowing before you change them
 
@@ -127,6 +131,7 @@ The prototype's NDA screens use a dark "desk" palette (see `frontend/src/app/glo
 - **Two origins in development.** `next dev` on `:3000` sets `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`; the container leaves it empty and is same-origin. `credentials: "include"` is what carries the cookie across the dev origin, and `DEV_ORIGINS` in `config.py` is what CORS allows.
 - **The AI answers with a patch, never the whole document.** `NdaUpdates` carries only the fields it learned this turn, and `applyUpdates` in `nda.ts` merges them. A model asked to restate every value each turn is a model that can silently overwrite one the user already settled. Keep it that way.
 - **Inference needs the host.** `app/ai.py` shells out to `claude`. Tests always mock the subprocess: the suite must never depend on a signed-in CLI or spend a live model call.
+- **The field model is written twice**, in `backend/app/nda.py` and `frontend/src/lib/nda.ts`. There is no shared codegen, so a field added to one and not the other is silently dropped in the merge. Change both, and add it to the prompt in `routes/chat.py` — a field absent from the prompt is a field the AI never fills.
 
 ### Commands
 
