@@ -2,20 +2,24 @@
 
 import { useEffect, useState } from "react";
 
+import { AuthScreen } from "@/components/AuthScreen";
 import { ChatPanel } from "@/components/ChatPanel";
-import { LoginScreen } from "@/components/LoginScreen";
+import { DraftList } from "@/components/DraftList";
 import { NdaDocument } from "@/components/NdaDocument";
 import { TemplateDocument } from "@/components/TemplateDocument";
-import { fetchDocumentTypes, fetchSession, logout, type User } from "@/lib/api";
+import {
+  fetchDocumentTypes,
+  fetchSession,
+  signOut,
+  type User,
+} from "@/lib/api";
 import type { DocumentSummary } from "@/lib/documents";
-import type { CoverPageField } from "@/lib/nda";
-import { COVER_PAGE_FIELD_LABELS } from "@/lib/nda";
+import { COVER_PAGE_FIELD_LABELS, type CoverPageField } from "@/lib/nda";
 import { useDocument } from "@/lib/useDocument";
 
 /**
- * The session gate. A signed-out visitor gets the login screen; everyone else
- * gets the desk. The session lives on the server behind a cookie, so a reload
- * resumes it — hence the check before the first paint.
+ * The session gate. The session lives on the server behind a signed cookie, so a
+ * reload resumes it — hence the check before the first paint.
  */
 export default function Page() {
   const [user, setUser] = useState<User | null>(null);
@@ -29,11 +33,11 @@ export default function Page() {
   }, []);
 
   if (checkingSession) {
-    return <main className="min-h-screen bg-desk" />;
+    return <main className="min-h-screen bg-canvas" />;
   }
 
   if (!user) {
-    return <LoginScreen onSignedIn={setUser} />;
+    return <AuthScreen onSignedIn={setUser} />;
   }
 
   return <Desk user={user} onSignedOut={() => setUser(null)} />;
@@ -56,50 +60,46 @@ function Desk({ user, onSignedOut }: { user: User; onSignedOut: () => void }) {
   const started = desk.documentType !== null;
 
   return (
-    /* Two independently scrolling panes on a desktop; one plain scrolling column on a phone. */
     <div className="app-shell flex min-h-screen flex-col lg:h-screen lg:flex-row">
-      <header className="no-print flex items-center justify-between gap-4 border-b border-desk-line bg-desk-raised px-5 py-3 lg:hidden">
+      {/* The rail: who you are, and what you have drafted. */}
+      <aside className="no-print flex shrink-0 flex-col gap-6 border-b border-card-line bg-card px-5 py-5 lg:w-[248px] lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-5 lg:py-7">
         <Wordmark />
-        <div className="flex items-center gap-3">
-          <SignOutButton onSignedOut={onSignedOut} />
-          {started ? (
-            <DownloadButton blanks={desk.blanks.length} onClick={downloadPdf} />
-          ) : null}
-        </div>
-      </header>
+        <DraftList
+          revision={desk.revision}
+          currentId={desk.draftId}
+          onOpen={(id) => void desk.openDraft(id)}
+          onNew={desk.newDraft}
+        />
+        <SignedInAs user={user} onSignedOut={onSignedOut} />
+      </aside>
 
-      {/* The desk: the conversation that fills the document in. */}
-      <div className="no-print flex flex-col border-desk-line bg-desk-raised lg:w-[440px] lg:shrink-0 lg:overflow-hidden lg:border-r xl:w-[480px]">
-        <div className="hidden px-7 pt-7 lg:block">
-          <div className="flex items-start justify-between gap-4">
-            <Wordmark />
-            <SignedInAs user={user} onSignedOut={onSignedOut} />
-          </div>
-        </div>
-
-        {/* min-h-0 lets the thread scroll inside the column instead of stretching it. */}
-        <div className="flex min-h-[460px] flex-1 flex-col px-5 py-6 lg:min-h-0 lg:px-7">
-          <ChatPanel
-            values={desk.values}
-            documentType={desk.documentType}
-            onReply={desk.applyReply}
-          />
+      {/* The conversation that fills the document in. */}
+      <div className="no-print flex flex-col border-card-line bg-canvas lg:w-[420px] lg:shrink-0 lg:overflow-hidden lg:border-r xl:w-[460px]">
+        <div className="flex min-h-[460px] flex-1 flex-col px-5 py-6 lg:min-h-0">
+          <ChatPanel messages={desk.messages} onSend={desk.submitTurn} />
         </div>
 
         {started ? (
-          <div className="sticky bottom-0 mt-auto hidden border-t border-desk-line bg-desk-raised px-7 py-4 lg:block">
+          <div className="sticky bottom-0 mt-auto border-t border-card-line bg-card px-5 py-4">
             <BlanksRemaining blanks={desk.blanks} isNda={desk.isNda} />
-            <DownloadButton
-              blanks={desk.blanks.length}
+            <button
+              type="button"
               onClick={downloadPdf}
-              className="mt-3 w-full"
-            />
+              title={
+                desk.blanks.length > 0
+                  ? "The document still has blanks. You can download it anyway."
+                  : undefined
+              }
+              className="mt-3 w-full rounded-lg border border-blue bg-white px-4 py-2.5 text-[14px] font-semibold text-blue transition-colors hover:bg-blue-pale"
+            >
+              Download PDF
+            </button>
           </div>
         ) : null}
       </div>
 
       {/* The paper. */}
-      <main className="preview-pane flex-1 bg-desk p-6 lg:overflow-auto lg:p-10">
+      <main className="preview-pane flex-1 bg-canvas p-6 lg:overflow-auto lg:p-10">
         <Paper desk={desk} />
       </main>
     </div>
@@ -154,15 +154,15 @@ function BlankPage({ message }: { message: string | null }) {
   return (
     <div className="flex h-full items-center justify-center">
       <div className="max-w-md">
-        <p className="text-[15px] leading-relaxed text-chalk-soft">
+        <p className="text-[15px] leading-relaxed text-muted">
           Tell the assistant what you need and the agreement will appear here. It
           can draft any of these:
         </p>
-        <ul className="mt-5 space-y-1.5">
+        <ul className="mt-5 grid gap-1.5">
           {documents.map((document) => (
             <li
               key={document.id}
-              className="font-[family-name:var(--font-document)] text-[15px] text-chalk"
+              className="font-[family-name:var(--font-document)] text-[15px] text-navy"
             >
               {document.name}
             </li>
@@ -180,26 +180,9 @@ function SignedInAs({
   user: User;
   onSignedOut: () => void;
 }) {
-  return (
-    <div className="shrink-0 text-right">
-      <p className="max-w-[150px] truncate text-[12px] text-chalk-soft">
-        {user.email}
-      </p>
-      <SignOutButton onSignedOut={onSignedOut} className="mt-0.5" />
-    </div>
-  );
-}
-
-function SignOutButton({
-  onSignedOut,
-  className = "",
-}: {
-  onSignedOut: () => void;
-  className?: string;
-}) {
-  const signOut = async () => {
+  const leave = async () => {
     try {
-      await logout();
+      await signOut();
     } catch {
       /* The cookie is the server's to forget, but a failed request is no reason
        * to strand the user in a session they asked to leave. */
@@ -208,23 +191,26 @@ function SignOutButton({
   };
 
   return (
-    <button
-      type="button"
-      onClick={signOut}
-      className={`font-[family-name:var(--font-utility)] text-[11px] tracking-[0.08em] text-chalk-soft uppercase transition-colors hover:text-chalk ${className}`}
-    >
-      Sign out
-    </button>
+    <div className="mt-auto border-t border-card-line pt-4">
+      <p className="truncate text-[12px] text-muted">{user.email}</p>
+      <button
+        type="button"
+        onClick={leave}
+        className="mt-1 font-[family-name:var(--font-utility)] text-[11px] tracking-[0.08em] text-muted uppercase transition-colors hover:text-navy"
+      >
+        Sign out
+      </button>
+    </div>
   );
 }
 
 function Wordmark() {
   return (
     <div>
-      <p className="font-[family-name:var(--font-utility)] text-[10px] font-medium tracking-[0.22em] text-chalk-soft uppercase">
+      <p className="font-[family-name:var(--font-utility)] text-[10px] font-medium tracking-[0.22em] text-blue uppercase">
         Prelegal
       </p>
-      <h1 className="mt-1 font-[family-name:var(--font-document)] text-[26px] leading-tight font-semibold text-chalk">
+      <h1 className="mt-1 font-[family-name:var(--font-document)] text-[22px] leading-tight font-semibold text-navy">
         Legal drafting
       </h1>
     </div>
@@ -240,8 +226,8 @@ function BlanksRemaining({
 }) {
   if (blanks.length === 0) {
     return (
-      <p className="text-[13px] text-chalk-soft">
-        Every blank is filled. The agreement is ready to sign.
+      <p className="text-[13px] text-muted">
+        Every blank is filled. The agreement is ready to review.
       </p>
     );
   }
@@ -250,37 +236,12 @@ function BlanksRemaining({
     isNda ? COVER_PAGE_FIELD_LABELS[blank as CoverPageField] : blank;
 
   return (
-    <p className="text-[13px] text-chalk-soft">
-      <span className="text-pencil">
+    <p className="text-[13px] text-muted">
+      <span className="font-medium text-pencil">
         {blanks.length} {blanks.length === 1 ? "blank" : "blanks"} left:
       </span>{" "}
       {blanks.slice(0, 4).map(label).join(", ")}
       {blanks.length > 4 ? `, and ${blanks.length - 4} more` : ""}.
     </p>
-  );
-}
-
-function DownloadButton({
-  blanks,
-  onClick,
-  className = "",
-}: {
-  blanks: number;
-  onClick: () => void;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={
-        blanks > 0
-          ? "The document still has blanks. You can download it anyway."
-          : undefined
-      }
-      className={`rounded-md bg-marker px-4 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:bg-[#f9e9a4] ${className}`}
-    >
-      Download PDF
-    </button>
   );
 }

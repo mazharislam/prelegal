@@ -2,150 +2,97 @@
 
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatPanel } from "./ChatPanel";
-import { ApiError } from "@/lib/api";
-import { DEFAULT_VALUES } from "@/lib/nda";
+import { ApiError, type ChatMessage } from "@/lib/api";
 
-const sendChat = vi.hoisted(() => vi.fn());
+afterEach(cleanup);
 
-vi.mock("@/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api")>()),
-  sendChat,
-}));
+const REPLY = "Got it. Who is the other party?";
 
-afterEach(() => {
-  cleanup();
-  vi.clearAllMocks();
-});
+/**
+ * The desk owns the conversation and the turn; the panel only says the message
+ * and shows what came back. This stands in for the desk.
+ */
+function Harness({ onSend }: { onSend: (content: string) => Promise<void> }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-const reply = {
-  reply: "Got it. Who is the other party?",
-  updates: { governingLaw: "Delaware" },
-  documentType: "mutual-nda",
-  unsupported: null,
-};
+  const send = async (content: string) => {
+    setMessages((current) => [...current, { role: "user", content }]);
+    await onSend(content);
+    setMessages((current) => [...current, { role: "assistant", content: REPLY }]);
+  };
 
-function renderPanel(onReply = vi.fn(), documentType: string | null = "mutual-nda") {
-  render(
-    <ChatPanel
-      values={DEFAULT_VALUES}
-      documentType={documentType}
-      onReply={onReply}
-    />,
-  );
-  return { onReply, textbox: screen.getByRole("textbox") };
+  return <ChatPanel messages={messages} onSend={send} />;
 }
+
+function renderPanel(onSend = vi.fn().mockResolvedValue(undefined)) {
+  render(<Harness onSend={onSend} />);
+  return { onSend, textbox: screen.getByRole("textbox") };
+}
+
+const sendButton = () => screen.getByRole("button", { name: "Send" });
 
 describe("ChatPanel", () => {
   it("opens with a greeting and nothing to send", () => {
     renderPanel();
 
     expect(screen.getByText(/draft a legal agreement/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(sendButton()).toBeDisabled();
   });
 
-  it("sends the turn, shows the reply, and hands back the answer", async () => {
-    sendChat.mockResolvedValue(reply);
-    const { onReply, textbox } = renderPanel();
+  it("hands the message to the desk and shows the answer", async () => {
+    const { onSend, textbox } = renderPanel();
 
     await userEvent.type(textbox, "Delaware law");
-    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await userEvent.click(sendButton());
 
-    expect(await screen.findByText(reply.reply)).toBeInTheDocument();
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith("Delaware law"));
     expect(screen.getByText("Delaware law")).toBeInTheDocument();
-    expect(onReply).toHaveBeenCalledWith(reply);
-  });
-
-  it("tells the backend which agreement is in play, so the model gets its schema", async () => {
-    sendChat.mockResolvedValue({ ...reply, documentType: "csa" });
-    const { textbox } = renderPanel(vi.fn(), "csa");
-
-    await userEvent.type(textbox, "12 month subscription");
-    await userEvent.click(screen.getByRole("button", { name: "Send" }));
-
-    await waitFor(() => expect(sendChat).toHaveBeenCalled());
-    expect(sendChat.mock.calls[0][2]).toBe("csa");
-  });
-
-  it("relays a request for an agreement we cannot draft", async () => {
-    const declined = {
-      reply:
-        "I cannot draft an employment contract. The closest I can do is a Professional Services Agreement — shall I?",
-      updates: {},
-      documentType: null,
-      unsupported: { requested: "employment contract", closest: "psa" },
-    };
-    sendChat.mockResolvedValue(declined);
-    const { onReply, textbox } = renderPanel(vi.fn(), null);
-
-    await userEvent.type(textbox, "I need an employment contract");
-    await userEvent.click(screen.getByRole("button", { name: "Send" }));
-
-    expect(await screen.findByText(/cannot draft an employment contract/i)).toBeInTheDocument();
-    expect(onReply).toHaveBeenCalledWith(declined);
-  });
-
-  it("sends the whole conversation, so the model has the history", async () => {
-    sendChat.mockResolvedValue(reply);
-    const { textbox } = renderPanel();
-
-    await userEvent.type(textbox, "first");
-    await userEvent.click(screen.getByRole("button", { name: "Send" }));
-    await screen.findByText(reply.reply);
-
-    await userEvent.type(screen.getByRole("textbox"), "second");
-    await userEvent.click(screen.getByRole("button", { name: "Send" }));
-
-    await waitFor(() => expect(sendChat).toHaveBeenCalledTimes(2));
-    const [messages] = sendChat.mock.calls[1];
-    expect(messages.map((m: { content: string }) => m.content)).toEqual([
-      "first",
-      reply.reply,
-      "second",
-    ]);
+    expect(await screen.findByText(REPLY)).toBeInTheDocument();
   });
 
   it("sends on Enter but not on Shift+Enter", async () => {
-    sendChat.mockResolvedValue(reply);
-    const { textbox } = renderPanel();
+    const { onSend, textbox } = renderPanel();
 
     await userEvent.type(textbox, "a line{Shift>}{Enter}{/Shift}still typing");
-    expect(sendChat).not.toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
 
     await userEvent.type(screen.getByRole("textbox"), "{Enter}");
-    await waitFor(() => expect(sendChat).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
   });
 
   it("locks the input while the model is thinking", async () => {
-    let resolve: (value: typeof reply) => void = () => {};
-    sendChat.mockReturnValue(new Promise((r) => (resolve = r)));
-    const { textbox } = renderPanel();
+    let finish: () => void = () => {};
+    const onSend = vi.fn().mockReturnValue(new Promise<void>((r) => (finish = r)));
+    const { textbox } = renderPanel(onSend);
 
     await userEvent.type(textbox, "Delaware law");
-    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await userEvent.click(sendButton());
 
     expect(await screen.findByRole("button", { name: "Thinking..." })).toBeDisabled();
     expect(screen.getByRole("textbox")).toBeDisabled();
 
-    resolve(reply);
+    finish();
 
-    await screen.findByText(reply.reply);
+    await screen.findByText(REPLY);
     expect(screen.getByRole("textbox")).toBeEnabled();
   });
 
   it("shows a failed turn without losing the conversation", async () => {
-    sendChat.mockRejectedValue(new ApiError("The claude CLI was not found.", 503));
-    const { onReply, textbox } = renderPanel();
+    const onSend = vi
+      .fn()
+      .mockRejectedValue(new ApiError("The claude CLI was not found.", 503));
+    const { textbox } = renderPanel(onSend);
 
     await userEvent.type(textbox, "Delaware law");
-    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await userEvent.click(sendButton());
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/claude CLI/i);
-    // The user's message stays put, and the document is not touched.
+    // The user's message stays put, and they can try again.
     expect(screen.getByText("Delaware law")).toBeInTheDocument();
-    expect(onReply).not.toHaveBeenCalled();
     expect(screen.getByRole("textbox")).toBeEnabled();
   });
 });

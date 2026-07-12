@@ -46,25 +46,96 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   if (!response.ok) {
-    throw new ApiError(`Request failed (${response.status})`, response.status);
+    throw new ApiError(await errorDetail(response), response.status);
   }
+
+  // A deleted draft answers 204, with nothing to parse.
+  if (response.status === 204) return undefined as T;
 
   return (await response.json()) as T;
 }
 
 /**
- * Signs in. There is no password: the backend takes the email on trust and
- * creates the user on first sight. Real credentials arrive with PL-7.
+ * The backend explains its refusals — "that email is taken", "those do not match
+ * an account" — and the user should read that, not a status code.
  */
-export function login(email: string): Promise<User> {
-  return request<User>("/api/auth/login", {
+async function errorDetail(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    if (typeof body?.detail === "string") return body.detail;
+  } catch {
+    /* Not every failure has a JSON body; fall back to the status. */
+  }
+  return `Request failed (${response.status})`;
+}
+
+export function signUp(email: string, password: string): Promise<User> {
+  return request<User>("/api/auth/signup", {
     method: "POST",
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, password }),
   });
 }
 
-export function logout(): Promise<void> {
-  return request<void>("/api/auth/logout", { method: "POST" });
+export function signIn(email: string, password: string): Promise<User> {
+  return request<User>("/api/auth/signin", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function signOut(): Promise<void> {
+  return request<void>("/api/auth/signout", { method: "POST" });
+}
+
+/* ------------------------------------------------------------------ drafts */
+
+export interface DraftSummary {
+  id: number;
+  documentType: string;
+  name: string;
+  blanks: number;
+  updated_at: string;
+}
+
+export interface Draft {
+  id: number;
+  documentType: string;
+  name: string;
+  values: NdaValues | FieldValues;
+  messages: ChatMessage[];
+  updated_at: string;
+}
+
+interface DraftBody {
+  documentType: string;
+  values: NdaValues | FieldValues;
+  messages: ChatMessage[];
+}
+
+export function listDrafts(): Promise<DraftSummary[]> {
+  return request<DraftSummary[]>("/api/drafts");
+}
+
+export function fetchDraft(id: number): Promise<Draft> {
+  return request<Draft>(`/api/drafts/${id}`);
+}
+
+export function createDraft(draft: DraftBody): Promise<Draft> {
+  return request<Draft>("/api/drafts", {
+    method: "POST",
+    body: JSON.stringify(draft),
+  });
+}
+
+export function saveDraft(id: number, draft: DraftBody): Promise<Draft> {
+  return request<Draft>(`/api/drafts/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(draft),
+  });
+}
+
+export function deleteDraft(id: number): Promise<void> {
+  return request<void>(`/api/drafts/${id}`, { method: "DELETE" });
 }
 
 export interface ChatMessage {

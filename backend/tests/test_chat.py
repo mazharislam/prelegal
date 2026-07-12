@@ -40,7 +40,10 @@ def fake_cli(monkeypatch, answer=None, *, stdout=None, error=None):
 
 
 def sign_in(client):
-    client.post("/api/auth/login", json={"email": "ada@example.com"})
+    client.post(
+        "/api/auth/signup",
+        json={"email": "ada@example.com", "password": "correct-horse"},
+    )
 
 
 def post_chat(client, content="Delaware law", document_type=None, values=None):

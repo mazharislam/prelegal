@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { Disclaimer } from "@/components/Disclaimer";
 import {
   COVER_PAGE_FIELD_LABELS,
   type CoverPageField,
@@ -204,6 +205,8 @@ export function NdaDocument({ values, activeField }: DocumentProps) {
           )}
         </p>
       </Section>
+
+      <Disclaimer />
 
       <div className="signature-block mt-8">
         <p className="sheet-prose text-[9.5pt]">
