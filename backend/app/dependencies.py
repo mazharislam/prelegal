@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import Cookie, Depends, HTTPException, status
 
-from app import database
+from app import database, security
 from app.config import SESSION_COOKIE
 
 
@@ -26,20 +26,21 @@ def get_current_user(
 ) -> sqlite3.Row:
     """Resolve the signed-in user from the session cookie.
 
-    The cookie holds a bare user id and is not a credential: PL-4 has no
-    authentication, so this identifies a session rather than proving one.
+    The cookie is signed, so a user cannot edit it into someone else's id: an
+    altered cookie fails its signature and is simply not a session.
     """
     if prelegal_session is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not signed in"
         )
 
-    if not prelegal_session.isdigit():
+    user_id = security.read_session(prelegal_session)
+    if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session"
         )
 
-    user = database.get_user_by_id(db, int(prelegal_session))
+    user = database.get_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session"

@@ -11,6 +11,14 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+# What the NDA still owes, for the draft list to count. The term and
+# confidentiality fields are not here: Common Paper ships the NDA with those
+# already chosen, so they are never blank. The parties are not here either —
+# they are signed by hand, which is why the frontend leaves them out of its own
+# blanks count.
+NDA_FIELDS = ["purpose", "effectiveDate", "governingLaw", "jurisdiction"]
+
+
 class PartyUpdate(BaseModel):
     company: str | None = None
     signatoryName: str | None = None

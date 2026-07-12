@@ -81,6 +81,19 @@ describe("TemplateDocument", () => {
     expect(xref).toHaveAttribute("title", "Target Uptime: 99.9%");
   });
 
+  it("warns that it is a draft, and does not hide the warning from the printer", () => {
+    // The PDF is the copy that leaves the building and might be signed, so the
+    // disclaimer must not be marked no-print.
+    const { container } = render(
+      <TemplateDocument template={template} values={{}} activeField={null} />,
+    );
+
+    const disclaimer = container.querySelector(".disclaimer");
+    expect(disclaimer).toHaveTextContent(/not legal advice/i);
+    expect(disclaimer).toHaveTextContent(/reviewed by a qualified lawyer/i);
+    expect(disclaimer).not.toHaveClass("no-print");
+  });
+
   it("lights up the value the assistant just filled in", () => {
     const { container } = render(
       <TemplateDocument

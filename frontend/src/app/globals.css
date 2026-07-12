@@ -1,34 +1,46 @@
 @import "tailwindcss";
 
+/*
+ * Two worlds, deliberately. The interface is a light, blue SaaS. The document is
+ * paper: cream, serif, printed. Keeping them distinct is the point — the thing
+ * you are drafting should not look like the tool you are drafting it in.
+ */
 @theme inline {
-  --color-desk: #1e222a;
-  --color-desk-raised: #262b34;
-  --color-desk-line: #363c47;
+  /* ---- interface */
+  --color-navy: #173793;
+  --color-blue: #3c66ce;
+  --color-blue-soft: #639bd5;
+  --color-blue-light: #92bbe6;
+  --color-blue-pale: #d6e4f2;
+  --color-card: #ffffff;
+  --color-card-line: #d8e2f2;
+  --color-canvas: #f4f7fc;
+  --color-body: #404040;
+  --color-muted: #888888;
+
+  /* ---- paper */
   --color-paper: #fbfaf7;
   --color-ink: #14171c;
   --color-ink-soft: #5b6270;
-  --color-chalk: #e6e8ec;
-  --color-chalk-soft: #99a1b0;
-  --color-marker: #f6e07f;
   --color-pencil: #b4342a;
+
   --font-document: var(--font-source-serif), Georgia, serif;
   --font-ui: var(--font-plex-sans), system-ui, sans-serif;
   --font-utility: var(--font-plex-mono), ui-monospace, monospace;
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
-  background: var(--color-desk);
-  color: var(--color-chalk);
+  background: var(--color-canvas);
+  color: var(--color-body);
   font-family: var(--font-ui);
 }
 
-/* Focus is not decoration here — it drives the cross-reference highlight. */
 :focus-visible {
-  outline: 2px solid var(--color-marker);
+  outline: 2px solid var(--color-blue);
   outline-offset: 2px;
 }
 
@@ -48,8 +60,8 @@ body {
   font-size: 10.5pt;
   line-height: 1.62;
   box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.4),
-    0 18px 50px -12px rgb(0 0 0 / 0.55);
+    0 1px 2px rgb(23 55 147 / 0.06),
+    0 18px 50px -12px rgb(23 55 147 / 0.18);
 }
 
 /*
@@ -95,8 +107,8 @@ body {
 
 /*
  * A cross-reference to the cover page. The dotted underline says "this term is
- * defined elsewhere"; the marker wash appears when the assistant has just filled
- * in the value behind it.
+ * defined elsewhere"; the wash appears when the assistant has just filled in the
+ * value behind it.
  */
 .xref {
   border-bottom: 1px dotted #a9a396;
@@ -116,10 +128,10 @@ body {
     box-shadow 140ms ease;
 }
 
-/* The marker wash: the one moment of colour in an otherwise black-and-white page. */
+/* The wash: where the answer just landed. */
 .lit {
-  background: var(--color-marker);
-  box-shadow: 0 0 0 2px var(--color-marker);
+  background: var(--color-blue-pale);
+  box-shadow: 0 0 0 2px var(--color-blue-pale);
 }
 
 /* An answer still owed. Reads like a blank on a paper contract. */
@@ -136,6 +148,17 @@ body {
 
 .signature-line {
   border-bottom: 1px solid #b9b3a7;
+}
+
+/*
+ * The disclaimer. It prints: the PDF is the thing that leaves the building, and
+ * it is the copy someone might otherwise mistake for advice.
+ */
+.disclaimer {
+  border: 1px solid #d8d4cb;
+  border-left: 3px solid var(--color-pencil);
+  background: #f6f2ea;
+  padding: 0.5rem 0.75rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -196,7 +219,8 @@ body {
   }
 
   .clause,
-  .signature-block {
+  .signature-block,
+  .disclaimer {
     break-inside: avoid;
   }
 }

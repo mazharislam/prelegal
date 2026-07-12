@@ -23,9 +23,9 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mutual NDA",
+  title: "Prelegal",
   description:
-    "Fill in the cover page and download a signable Common Paper Mutual NDA.",
+    "Draft a legal agreement by talking it through, and download it when it is done.",
 };
 
 export default function RootLayout({

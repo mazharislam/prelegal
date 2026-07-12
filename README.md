@@ -31,15 +31,20 @@ statically exported Next.js frontend on the same origin.
 scripts/start-mac.sh        # or start-linux.sh, or start-windows.ps1
 ```
 
-Then open http://localhost:8000. Sign in with any email — there is no password
-yet, and the account is created on the spot.
+Then open http://localhost:8000 and create an account.
+
+Your drafts are saved as you talk — there is no Save button — and reopening one
+brings back the conversation as well as the document. Every agreement carries a
+"draft, not legal advice" notice, and it prints with the PDF.
 
 ```bash
 scripts/stop-mac.sh         # or stop-linux.sh, or stop-windows.ps1
 ```
 
-The SQLite database is temporary: it is rebuilt from scratch every time the
-container starts, so users do not survive a restart.
+The SQLite database is temporary: it is rebuilt from scratch every time the app
+starts, so **accounts and drafts do not survive a restart**. That is deliberate
+for now. A deployment that kept its data would also need to set
+`PRELEGAL_SECRET_KEY`, or every restart would sign everyone out.
 
 ## Develop
 

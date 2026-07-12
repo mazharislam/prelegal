@@ -3,12 +3,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ApiError,
   type ChatMessage,
+  deleteDraft,
   fetchDocumentTypes,
   fetchSession,
   fetchTemplate,
-  login,
-  logout,
+  saveDraft,
   sendChat,
+  signIn,
+  signOut,
+  signUp,
 } from "./api";
 import { DEFAULT_VALUES } from "./nda";
 
@@ -27,33 +30,44 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("login", () => {
-  it("posts the email and returns the user", async () => {
+describe("signIn", () => {
+  it("posts the credentials and returns the user", async () => {
     const user = { id: 1, email: "ada@example.com", created_at: "2026-07-11" };
     const fetchMock = mockFetch({ json: async () => user });
 
-    await expect(login("ada@example.com")).resolves.toEqual(user);
+    await expect(signIn("ada@example.com", "correct-horse")).resolves.toEqual(user);
 
     const [path, init] = fetchMock.mock.calls[0];
-    expect(path).toBe("/api/auth/login");
+    expect(path).toBe("/api/auth/signin");
     expect(init.method).toBe("POST");
-    expect(init.body).toBe(JSON.stringify({ email: "ada@example.com" }));
+    expect(JSON.parse(init.body)).toEqual({
+      email: "ada@example.com",
+      password: "correct-horse",
+    });
     /* Without this the session cookie is dropped when `next dev` talks to the
      * backend on another origin. */
     expect(init.credentials).toBe("include");
   });
 
-  it("reports a rejected email with its status", async () => {
-    mockFetch({ ok: false, status: 422 });
+  it("carries the backend's own words back, not a status code", async () => {
+    mockFetch({
+      ok: false,
+      status: 401,
+      json: async () => ({ detail: "That email and password do not match an account." }),
+    });
 
-    await expect(login("nope")).rejects.toMatchObject({ status: 422 });
+    await expect(signIn("ada@example.com", "guessing!!")).rejects.toThrow(
+      /do not match an account/,
+    );
   });
 
   it("explains an unreachable server", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("failed")));
 
-    await expect(login("ada@example.com")).rejects.toThrow(ApiError);
-    await expect(login("ada@example.com")).rejects.toThrow(/backend running/);
+    await expect(signIn("ada@example.com", "correct-horse")).rejects.toThrow(ApiError);
+    await expect(signIn("ada@example.com", "correct-horse")).rejects.toThrow(
+      /backend running/,
+    );
   });
 });
 
@@ -135,13 +149,44 @@ describe("fetchTemplate", () => {
   });
 });
 
-describe("logout", () => {
-  it("posts to the logout route", async () => {
+describe("signUp", () => {
+  it("posts the credentials to the signup route", async () => {
+    const fetchMock = mockFetch({ json: async () => ({ id: 1 }) });
+
+    await signUp("ada@example.com", "correct-horse");
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/signup");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).password).toBe("correct-horse");
+  });
+});
+
+describe("signOut", () => {
+  it("posts to the signout route", async () => {
     const fetchMock = mockFetch({});
 
-    await logout();
+    await signOut();
 
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/logout");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/signout");
     expect(fetchMock.mock.calls[0][1].method).toBe("POST");
+  });
+});
+
+describe("drafts", () => {
+  it("saves a draft over itself", async () => {
+    const fetchMock = mockFetch({ json: async () => ({ id: 3 }) });
+    const body = { documentType: "sla", values: {}, messages: [] };
+
+    await saveDraft(3, body);
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/drafts/3");
+    expect(fetchMock.mock.calls[0][1].method).toBe("PUT");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(body);
+  });
+
+  it("deletes a draft, which answers with no content at all", async () => {
+    // 204 has no body: parsing one would throw.
+    mockFetch({ status: 204, json: async () => Promise.reject(new Error("no body")) });
+
+    await expect(deleteDraft(3)).resolves.toBeUndefined();
   });
 });

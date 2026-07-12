@@ -2,19 +2,34 @@
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.nda import NdaUpdates
+from app.security import BCRYPT_MAX_BYTES
 
 
-class LoginRequest(BaseModel):
-    """The fake login. A password field is deliberately absent: PL-4 has no
-    authentication, and accepting a password would imply it is checked."""
-
+class Credentials(BaseModel):
     email: EmailStr
+    password: str = Field(min_length=8)
+
+    @field_validator("password")
+    @classmethod
+    def fits_bcrypt(cls, password: str) -> str:
+        """bcrypt's limit is 72 *bytes*, not 72 characters.
+
+        A password of 72 accented characters is 144 bytes, and bcrypt refuses it
+        outright rather than truncating. Checking the character count here would
+        wave it through, and signing up would then fail with a 500 — an account
+        the user could never create and never be told why.
+        """
+        if len(password.encode("utf-8")) > BCRYPT_MAX_BYTES:
+            raise ValueError(f"Password must be {BCRYPT_MAX_BYTES} bytes or fewer.")
+        return password
 
 
 class UserResponse(BaseModel):
+    """What a user is allowed to see about themselves. The hash is not on it."""
+
     id: int
     email: str
     created_at: str
@@ -52,6 +67,33 @@ class ChatResponse(BaseModel):
     updates: NdaUpdates | dict[str, str]
     documentType: str | None = None
     unsupported: Unsupported | None = None
+
+
+class DraftRequest(BaseModel):
+    """A draft as the desk holds it: the agreement, its values, the conversation."""
+
+    documentType: str
+    values: dict[str, Any] = {}
+    messages: list[ChatMessage] = []
+
+
+class DraftResponse(BaseModel):
+    id: int
+    documentType: str
+    name: str
+    values: dict[str, Any]
+    messages: list[ChatMessage]
+    updated_at: str
+
+
+class DraftSummary(BaseModel):
+    """Enough to list a draft without loading the whole agreement."""
+
+    id: int
+    documentType: str
+    name: str
+    blanks: int
+    updated_at: str
 
 
 class DocumentTypeSummary(BaseModel):

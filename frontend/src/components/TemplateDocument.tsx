@@ -1,3 +1,4 @@
+import { Disclaimer } from "@/components/Disclaimer";
 import type {
   DocumentTemplate,
   FieldValues,
@@ -68,9 +69,10 @@ export function TemplateDocument({
         </div>
       </section>
 
-      <p className="mt-8 text-[8pt] text-ink-soft">
-        {template.name} by Common Paper, free to use under CC BY 4.0. This draft
-        needs review by a lawyer before anyone signs it.
+      <Disclaimer />
+
+      <p className="mt-6 text-[8pt] text-ink-soft">
+        {template.name} by Common Paper, free to use under CC BY 4.0.
       </p>
     </article>
   );

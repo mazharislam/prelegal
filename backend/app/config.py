@@ -5,6 +5,8 @@ point the app at a throwaway database without reloading modules.
 """
 
 import os
+import secrets
+from functools import lru_cache
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -22,6 +24,18 @@ SESSION_COOKIE = "prelegal_session"
 # The Next.js dev server, which runs on a different origin than the API and so
 # needs to be allowed to send the session cookie.
 DEV_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+
+@lru_cache(maxsize=1)
+def secret_key() -> str:
+    """The key that signs session cookies.
+
+    Generated at startup when unset, which is the right default here: the
+    database is rebuilt on every start, so there are no accounts for a session to
+    outlive. A deployment that kept its data would set PRELEGAL_SECRET_KEY, or
+    every restart would sign everyone out.
+    """
+    return os.environ.get("PRELEGAL_SECRET_KEY") or secrets.token_urlsafe(32)
 
 
 def database_path() -> Path:
