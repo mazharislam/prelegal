@@ -5,6 +5,8 @@ is required, it is checked, it is never stored in the clear, and the cookie
 cannot be edited into somebody else's session.
 """
 
+from itsdangerous import URLSafeSerializer
+
 from app import security
 from app.config import SESSION_COOKIE
 
@@ -123,25 +125,36 @@ def test_an_unknown_email_fails_the_same_way_as_a_wrong_password(client):
 
 
 def test_a_session_cannot_be_edited_into_someone_elses(client):
-    """The whole point of signing the cookie."""
+    """The whole point of signing the cookie.
+
+    The payload is what an attacker would want to change — the user id — so that
+    is what is tampered with here. Nudging the last character of the *signature*
+    would be a poor test: base64 carries spare low bits, so several final
+    characters decode to the same signature, and the cookie would sometimes still
+    be perfectly valid.
+    """
     signup(client)
     signed = client.cookies[SESSION_COOKIE]
+    payload, signature = signed.rsplit(".", 1)
 
     # A bare user id, as PL-4's fake session used to carry.
     client.cookies.set(SESSION_COOKIE, "1")
     assert client.get("/api/auth/me").status_code == 401
 
-    # The real cookie, with its payload tampered with.
-    client.cookies.set(SESSION_COOKIE, signed[:-1] + ("a" if signed[-1] != "a" else "b"))
+    # The real cookie, rewritten to claim a different user.
+    forged = URLSafeSerializer("irrelevant", salt="session").dumps(2).rsplit(".", 1)[0]
+    client.cookies.set(SESSION_COOKIE, f"{forged}.{signature}")
+    assert client.get("/api/auth/me").status_code == 401
+
+    # And the signature swapped for one that is not a signature at all.
+    client.cookies.set(SESSION_COOKIE, f"{payload}.not-a-signature")
     assert client.get("/api/auth/me").status_code == 401
 
     client.cookies.set(SESSION_COOKIE, signed)
     assert client.get("/api/auth/me").status_code == 200
 
 
-def test_a_session_signed_with_another_key_is_not_ours(client, monkeypatch):
-    from itsdangerous import URLSafeSerializer
-
+def test_a_session_signed_with_another_key_is_not_ours(client):
     forged = URLSafeSerializer("not-our-secret", salt="session").dumps(1)
     client.cookies.set(SESSION_COOKIE, forged)
 

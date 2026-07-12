@@ -131,7 +131,7 @@ The interface uses this palette. The **document** does not: it is paper — crea
 | `backend/app/routes/chat.py` | `/api/chat`: the prompt, the per-turn schema, one turn |
 | `backend/app/routes/documents.py` | `/api/documents`: what we can draft, and its text |
 | `backend/app/config.py` | Paths read lazily from the environment, so tests can redirect them |
-| `backend/app/database.py` | Plain `sqlite3`; one table, so no ORM |
+| `backend/app/database.py` | Plain `sqlite3`; two tables, so no ORM. Every draft query is scoped by `user_id` |
 | `backend/app/dependencies.py` | `get_db` (one connection per request), `get_current_user` (cookie) |
 | `backend/app/models.py` | Request and response models |
 | `backend/app/security.py` | Password hashing, and the signed session |
@@ -141,8 +141,8 @@ The interface uses this palette. The **document** does not: it is paper — crea
 | `frontend/src/lib/api.ts` | API client; `ApiError` carries the HTTP status |
 | `frontend/src/lib/nda.ts` | The NDA's values, how they read, and `applyUpdates` |
 | `frontend/src/lib/documents.ts` | Every other agreement: a flat field map and its merge |
-| `frontend/src/lib/useDocument.ts` | The desk: the agreement, its values, the conversation, and the autosave |
-| `frontend/src/components/ChatPanel.tsx` | The interview |
+| `frontend/src/lib/useDocument.ts` | The desk: the agreement, its values, the conversation, the turn, and the autosave |
+| `frontend/src/components/ChatPanel.tsx` | Says the message and shows what came back; the turn itself is the desk's |
 | `frontend/src/components/NdaDocument.tsx` | The NDA, drafted by hand |
 | `frontend/src/components/TemplateDocument.tsx` | The other ten, rendered from the template |
 | `frontend/src/components/Disclaimer.tsx` | The draft warning, on both documents; it prints |
@@ -156,6 +156,9 @@ The interface uses this palette. The **document** does not: it is paper — crea
 - **The session cookie is signed** (`app/security.py`). An edited cookie fails its signature and is not a session. The signing key is generated at startup unless `PRELEGAL_SECRET_KEY` is set — fine while the database is disposable, since there are no accounts for a session to outlive.
 - **The database is still disposable.** `init_db()` deletes the file and recreates the schema on every start; PL-7's own ticket allows this. Accounts and drafts do not survive a restart. Anything that needs them to will have to change `init_db` first.
 - **Drafts are scoped in the query, not checked afterwards.** `database.py` takes `user_id` on every draft read and write, so another user's draft is absent rather than forbidden. Keep it that way: a 403 tells a stranger the draft exists.
+- **The turn belongs to the desk, not the chat panel.** `submitTurn` in `useDocument.ts` sends the message, applies the answer, and saves — guarded by a `generation` counter that `openDraft` and `newDraft` bump. A turn takes seconds and a save is in flight after it; when this logic lived in `ChatPanel`, opening another draft in the meantime let the stale answer land on the wrong document and write one draft's contents over another's. Do not move it back.
+- **bcrypt's limit is 72 _bytes_, not characters** (`security.py`, `models.py`). Seventy-two accented characters are 144 bytes, and bcrypt 5 refuses them outright rather than truncating. Validate by byte length, or signup 500s on a password the user was told was fine.
+- **Sign-in checks the password before it checks the user exists** (`routes/auth.py`). That order is the point: short-circuiting past bcrypt when the email is unknown makes "no such account" faster than "wrong password", which is the timing signal the shared error message exists to remove. The dummy hash is computed once for the same reason.
 - **The frontend is a static export.** There is no Node runtime in the image and no Next.js server, so no server components, route handlers, or SSR. Everything is client-side.
 - **Two origins in development.** `next dev` on `:3000` sets `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`; the container leaves it empty and is same-origin. `credentials: "include"` is what carries the cookie across the dev origin, and `DEV_ORIGINS` in `config.py` is what CORS allows.
 - **The AI answers with a patch, never the whole document.** `NdaUpdates` carries only the fields it learned this turn, and `applyUpdates` in `nda.ts` merges them. A model asked to restate every value each turn is a model that can silently overwrite one the user already settled. Keep it that way.
