@@ -149,6 +149,75 @@ export function missingFields(values: NdaValues): CoverPageField[] {
   return REQUIRED_FIELDS.filter((field) => !resolveField(field, values).trim());
 }
 
+/**
+ * A patch from the AI: only the fields it learned this turn. Everything else is
+ * absent or null, so merging can add and change values but never blank one out.
+ */
+export interface NdaUpdates {
+  purpose?: string | null;
+  effectiveDate?: string | null;
+  mndaTermKind?: NdaValues["mndaTermKind"] | null;
+  mndaTermYears?: string | null;
+  confidentialityKind?: NdaValues["confidentialityKind"] | null;
+  confidentialityYears?: string | null;
+  governingLaw?: string | null;
+  jurisdiction?: string | null;
+  modifications?: string | null;
+  party1?: Partial<Party> | null;
+  party2?: Partial<Party> | null;
+}
+
+function mergeParty(party: Party, update: Partial<Party> | null | undefined): Party {
+  if (!update) return party;
+  const merged = { ...party };
+  for (const [key, value] of Object.entries(update) as [keyof Party, string][]) {
+    if (value) merged[key] = value;
+  }
+  return merged;
+}
+
+/** Applies an AI patch to the document. */
+export function applyUpdates(values: NdaValues, updates: NdaUpdates): NdaValues {
+  const merged = { ...values };
+  const scalars = [
+    "purpose",
+    "effectiveDate",
+    "mndaTermKind",
+    "mndaTermYears",
+    "confidentialityKind",
+    "confidentialityYears",
+    "governingLaw",
+    "jurisdiction",
+    "modifications",
+  ] as const;
+
+  for (const key of scalars) {
+    const value = updates[key];
+    if (value) merged[key] = value as never;
+  }
+
+  merged.party1 = mergeParty(values.party1, updates.party1);
+  merged.party2 = mergeParty(values.party2, updates.party2);
+  return merged;
+}
+
+/**
+ * The cover-page fields a patch touched, so the document can light up what the
+ * AI just filled in — the same highlight the form drove with focus.
+ */
+export function updatedCoverPageFields(updates: NdaUpdates): CoverPageField[] {
+  const touched: CoverPageField[] = [];
+  if (updates.purpose) touched.push("purpose");
+  if (updates.effectiveDate) touched.push("effectiveDate");
+  if (updates.mndaTermKind || updates.mndaTermYears) touched.push("mndaTerm");
+  if (updates.confidentialityKind || updates.confidentialityYears) {
+    touched.push("termOfConfidentiality");
+  }
+  if (updates.governingLaw) touched.push("governingLaw");
+  if (updates.jurisdiction) touched.push("jurisdiction");
+  return touched;
+}
+
 /** A filename a person would recognize in their downloads folder. */
 export function documentFileName(values: NdaValues): string {
   const parties = [values.party1.company, values.party2.company]

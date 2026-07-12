@@ -11,13 +11,13 @@ import { STANDARD_TERMS } from "@/lib/standard-terms";
 
 interface DocumentProps {
   values: NdaValues;
-  /** The cover-page value the user is currently editing, if any. */
+  /** The cover-page value the assistant most recently filled in, if any. */
   activeField: CoverPageField | null;
 }
 
 /**
  * A value the user supplied, or the blank it still owes. Both light up when the
- * form is sitting on the field, so the user can see where their answer lands.
+ * assistant has just filled the field, so the user can see where their answer lands.
  */
 function Value({
   field,

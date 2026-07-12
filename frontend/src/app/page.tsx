@@ -2,16 +2,19 @@
 
 import { useEffect, useState } from "react";
 
+import { ChatPanel } from "@/components/ChatPanel";
 import { LoginScreen } from "@/components/LoginScreen";
 import { NdaDocument } from "@/components/NdaDocument";
-import { NdaForm } from "@/components/NdaForm";
 import { fetchSession, logout, type User } from "@/lib/api";
 import {
+  applyUpdates,
   COVER_PAGE_FIELD_LABELS,
   DEFAULT_VALUES,
   type CoverPageField,
   documentFileName,
   missingFields,
+  type NdaUpdates,
+  updatedCoverPageFields,
 } from "@/lib/nda";
 
 /**
@@ -54,6 +57,15 @@ function NdaDesk({
   const blanks = missingFields(values);
 
   /**
+   * Fold the AI's patch into the document, and light up what it just filled in —
+   * the highlight the form used to drive with focus now follows the conversation.
+   */
+  const applyAiUpdates = (updates: NdaUpdates) => {
+    setValues((current) => applyUpdates(current, updates));
+    setActiveField(updatedCoverPageFields(updates).at(-1) ?? null);
+  };
+
+  /**
    * Printing is the download. The browser's "Save as PDF" names the file after
    * the document title, so we borrow the title for the length of the dialog.
    */
@@ -75,8 +87,8 @@ function NdaDesk({
         </div>
       </header>
 
-      {/* The desk: everything the user can change. */}
-      <div className="no-print flex flex-col border-desk-line bg-desk-raised lg:w-[440px] lg:shrink-0 lg:overflow-y-auto lg:border-r xl:w-[480px]">
+      {/* The desk: the conversation that fills the document in. */}
+      <div className="no-print flex flex-col border-desk-line bg-desk-raised lg:w-[440px] lg:shrink-0 lg:overflow-hidden lg:border-r xl:w-[480px]">
         <div className="hidden px-7 pt-7 lg:block">
           <div className="flex items-start justify-between gap-4">
             <Wordmark />
@@ -84,12 +96,9 @@ function NdaDesk({
           </div>
         </div>
 
-        <div className="px-5 py-6 lg:px-7">
-          <NdaForm
-            values={values}
-            onChange={setValues}
-            onFocusField={setActiveField}
-          />
+        {/* min-h-0 lets the thread scroll inside the column instead of stretching it. */}
+        <div className="flex min-h-[460px] flex-1 flex-col px-5 py-6 lg:min-h-0 lg:px-7">
+          <ChatPanel values={values} onUpdates={applyAiUpdates} />
         </div>
 
         <div className="sticky bottom-0 mt-auto hidden border-t border-desk-line bg-desk-raised px-7 py-4 lg:block">

@@ -8,6 +8,8 @@
  * cookie in that cross-origin case.
  */
 
+import type { NdaUpdates, NdaValues } from "@/lib/nda";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 export interface User {
@@ -58,6 +60,30 @@ export function login(email: string): Promise<User> {
 
 export function logout(): Promise<void> {
   return request<void>("/api/auth/logout", { method: "POST" });
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatReply {
+  reply: string;
+  updates: NdaUpdates;
+}
+
+/**
+ * One turn of the NDA interview. The whole conversation and the document so far
+ * go up; a reply and a patch of newly-learned fields come back.
+ */
+export function sendChat(
+  messages: ChatMessage[],
+  values: NdaValues,
+): Promise<ChatReply> {
+  return request<ChatReply>("/api/chat", {
+    method: "POST",
+    body: JSON.stringify({ messages, values }),
+  });
 }
 
 /** The signed-in user, or null when there is no session. */

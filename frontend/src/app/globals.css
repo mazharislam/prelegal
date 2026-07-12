@@ -95,8 +95,8 @@ body {
 
 /*
  * A cross-reference to the cover page. The dotted underline says "this term is
- * defined elsewhere"; the marker wash appears when the form is sitting on the
- * value behind it.
+ * defined elsewhere"; the marker wash appears when the assistant has just filled
+ * in the value behind it.
  */
 .xref {
   border-bottom: 1px dotted #a9a396;

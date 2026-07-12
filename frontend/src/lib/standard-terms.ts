@@ -118,16 +118,3 @@ export const STANDARD_TERMS: StandardTermsSection[] = [
     ],
   },
 ];
-
-/** Clause numbers that reference a given cover-page value, for the form hints. */
-export function clausesReferencing(field: CoverPageField): number[] {
-  const clauses: number[] = [];
-  STANDARD_TERMS.forEach((section, index) => {
-    const references = section.body.some(
-      (segment) =>
-        typeof segment === "object" && "ref" in segment && segment.ref === field,
-    );
-    if (references) clauses.push(index + 1);
-  });
-  return clauses;
-}
