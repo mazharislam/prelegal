@@ -5,22 +5,17 @@ import { useEffect, useState } from "react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { LoginScreen } from "@/components/LoginScreen";
 import { NdaDocument } from "@/components/NdaDocument";
-import { fetchSession, logout, type User } from "@/lib/api";
-import {
-  applyUpdates,
-  COVER_PAGE_FIELD_LABELS,
-  DEFAULT_VALUES,
-  type CoverPageField,
-  documentFileName,
-  missingFields,
-  type NdaUpdates,
-  updatedCoverPageFields,
-} from "@/lib/nda";
+import { TemplateDocument } from "@/components/TemplateDocument";
+import { fetchDocumentTypes, fetchSession, logout, type User } from "@/lib/api";
+import type { DocumentSummary } from "@/lib/documents";
+import type { CoverPageField } from "@/lib/nda";
+import { COVER_PAGE_FIELD_LABELS } from "@/lib/nda";
+import { useDocument } from "@/lib/useDocument";
 
 /**
  * The session gate. A signed-out visitor gets the login screen; everyone else
- * gets the NDA desk. The session lives on the server behind a cookie, so a
- * reload resumes it — hence the check before the first paint.
+ * gets the desk. The session lives on the server behind a cookie, so a reload
+ * resumes it — hence the check before the first paint.
  */
 export default function Page() {
   const [user, setUser] = useState<User | null>(null);
@@ -41,29 +36,11 @@ export default function Page() {
     return <LoginScreen onSignedIn={setUser} />;
   }
 
-  return <NdaDesk user={user} onSignedOut={() => setUser(null)} />;
+  return <Desk user={user} onSignedOut={() => setUser(null)} />;
 }
 
-function NdaDesk({
-  user,
-  onSignedOut,
-}: {
-  user: User;
-  onSignedOut: () => void;
-}) {
-  const [values, setValues] = useState(DEFAULT_VALUES);
-  const [activeField, setActiveField] = useState<CoverPageField | null>(null);
-
-  const blanks = missingFields(values);
-
-  /**
-   * Fold the AI's patch into the document, and light up what it just filled in —
-   * the highlight the form used to drive with focus now follows the conversation.
-   */
-  const applyAiUpdates = (updates: NdaUpdates) => {
-    setValues((current) => applyUpdates(current, updates));
-    setActiveField(updatedCoverPageFields(updates).at(-1) ?? null);
-  };
+function Desk({ user, onSignedOut }: { user: User; onSignedOut: () => void }) {
+  const desk = useDocument();
 
   /**
    * Printing is the download. The browser's "Save as PDF" names the file after
@@ -71,10 +48,12 @@ function NdaDesk({
    */
   const downloadPdf = () => {
     const previousTitle = document.title;
-    document.title = documentFileName(values);
+    document.title = desk.fileName;
     window.print();
     document.title = previousTitle;
   };
+
+  const started = desk.documentType !== null;
 
   return (
     /* Two independently scrolling panes on a desktop; one plain scrolling column on a phone. */
@@ -83,7 +62,9 @@ function NdaDesk({
         <Wordmark />
         <div className="flex items-center gap-3">
           <SignOutButton onSignedOut={onSignedOut} />
-          <DownloadButton blanks={blanks.length} onClick={downloadPdf} />
+          {started ? (
+            <DownloadButton blanks={desk.blanks.length} onClick={downloadPdf} />
+          ) : null}
         </div>
       </header>
 
@@ -98,23 +79,96 @@ function NdaDesk({
 
         {/* min-h-0 lets the thread scroll inside the column instead of stretching it. */}
         <div className="flex min-h-[460px] flex-1 flex-col px-5 py-6 lg:min-h-0 lg:px-7">
-          <ChatPanel values={values} onUpdates={applyAiUpdates} />
-        </div>
-
-        <div className="sticky bottom-0 mt-auto hidden border-t border-desk-line bg-desk-raised px-7 py-4 lg:block">
-          <BlanksRemaining blanks={blanks} />
-          <DownloadButton
-            blanks={blanks.length}
-            onClick={downloadPdf}
-            className="mt-3 w-full"
+          <ChatPanel
+            values={desk.values}
+            documentType={desk.documentType}
+            onReply={desk.applyReply}
           />
         </div>
+
+        {started ? (
+          <div className="sticky bottom-0 mt-auto hidden border-t border-desk-line bg-desk-raised px-7 py-4 lg:block">
+            <BlanksRemaining blanks={desk.blanks} isNda={desk.isNda} />
+            <DownloadButton
+              blanks={desk.blanks.length}
+              onClick={downloadPdf}
+              className="mt-3 w-full"
+            />
+          </div>
+        ) : null}
       </div>
 
       {/* The paper. */}
       <main className="preview-pane flex-1 bg-desk p-6 lg:overflow-auto lg:p-10">
-        <NdaDocument values={values} activeField={activeField} />
+        <Paper desk={desk} />
       </main>
+    </div>
+  );
+}
+
+function Paper({ desk }: { desk: ReturnType<typeof useDocument> }) {
+  if (desk.isNda) {
+    return (
+      <NdaDocument
+        values={desk.ndaValues}
+        activeField={desk.activeField as CoverPageField | null}
+      />
+    );
+  }
+
+  if (desk.template) {
+    return (
+      <TemplateDocument
+        template={desk.template}
+        values={desk.fieldValues}
+        activeField={desk.activeField}
+      />
+    );
+  }
+
+  return <BlankPage message={desk.templateError} />;
+}
+
+/**
+ * Before an agreement is chosen there is nothing to draft. Rather than an empty
+ * page, say what can be asked for — "tell me what you need" is a poor prompt if
+ * the user cannot see what is on offer.
+ */
+function BlankPage({ message }: { message: string | null }) {
+  const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+
+  useEffect(() => {
+    fetchDocumentTypes()
+      .then(setDocuments)
+      .catch(() => setDocuments([]));
+  }, []);
+
+  if (message) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="max-w-sm text-center text-[15px] text-pencil">{message}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full items-center justify-center">
+      <div className="max-w-md">
+        <p className="text-[15px] leading-relaxed text-chalk-soft">
+          Tell the assistant what you need and the agreement will appear here. It
+          can draft any of these:
+        </p>
+        <ul className="mt-5 space-y-1.5">
+          {documents.map((document) => (
+            <li
+              key={document.id}
+              className="font-[family-name:var(--font-document)] text-[15px] text-chalk"
+            >
+              {document.name}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -171,27 +225,37 @@ function Wordmark() {
         Prelegal
       </p>
       <h1 className="mt-1 font-[family-name:var(--font-document)] text-[26px] leading-tight font-semibold text-chalk">
-        Mutual NDA
+        Legal drafting
       </h1>
     </div>
   );
 }
 
-function BlanksRemaining({ blanks }: { blanks: CoverPageField[] }) {
+function BlanksRemaining({
+  blanks,
+  isNda,
+}: {
+  blanks: string[];
+  isNda: boolean;
+}) {
   if (blanks.length === 0) {
     return (
       <p className="text-[13px] text-chalk-soft">
-        Every blank is filled. The NDA is ready to sign.
+        Every blank is filled. The agreement is ready to sign.
       </p>
     );
   }
+
+  const label = (blank: string) =>
+    isNda ? COVER_PAGE_FIELD_LABELS[blank as CoverPageField] : blank;
 
   return (
     <p className="text-[13px] text-chalk-soft">
       <span className="text-pencil">
         {blanks.length} {blanks.length === 1 ? "blank" : "blanks"} left:
       </span>{" "}
-      {blanks.map((field) => COVER_PAGE_FIELD_LABELS[field]).join(", ")}.
+      {blanks.slice(0, 4).map(label).join(", ")}
+      {blanks.length > 4 ? `, and ${blanks.length - 4} more` : ""}.
     </p>
   );
 }

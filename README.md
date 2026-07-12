@@ -1,7 +1,11 @@
 # Prelegal
 
 Draft legal agreements from the Common Paper templates in `templates/`. Tell the
-assistant about your deal and it fills in the document as you talk.
+assistant about your deal; it works out which of the 11 agreements you need and
+fills it in as you talk.
+
+Ask for something we have no template for — an employment contract, a lease — and
+it says so, and offers the closest agreement it can actually draft.
 
 ## AI chat needs the backend on your host
 
@@ -80,3 +84,7 @@ cd frontend && npm run lint && npm run typecheck
 | `templates/` | Common Paper agreement templates (PL-2) |
 | `catalog.json` | Index of those templates |
 | `scripts/` | Start and stop, per platform |
+
+The templates are the source of truth for what each agreement asks you. They mark
+the values they need in the text, and the backend reads those marks — so a
+template change becomes a question the assistant asks, with nothing else to edit.

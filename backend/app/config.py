@@ -8,6 +8,12 @@ import os
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = BACKEND_DIR.parent
+
+# The agreement templates and their catalogue. These ship inside the image: the
+# backend cannot ask the user for a value it does not know the document needs.
+TEMPLATES_DIR = Path(os.environ.get("PRELEGAL_TEMPLATES_DIR", PROJECT_ROOT / "templates"))
+CATALOG_PATH = Path(os.environ.get("PRELEGAL_CATALOG_PATH", PROJECT_ROOT / "catalog.json"))
 
 # The fake session cookie. PL-4 has no authentication: this carries a user id,
 # not a credential. PL-7 replaces the value with a signed token.

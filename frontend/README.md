@@ -1,11 +1,8 @@
-# Mutual NDA creator
+# Prelegal frontend
 
-Turns the Common Paper Mutual NDA in `../templates/` into a document you can
-talk your way through and download.
-
-Tell the assistant about your deal on the left; the agreement on the right fills
-in as it learns each value. **Download PDF** prints the document — the browser's
-"Save as PDF" writes the file, named after the two parties.
+Talk to an assistant; watch the agreement fill itself in. **Download PDF** prints
+the document — the browser's "Save as PDF" writes the file, named after the
+parties.
 
 ```bash
 npm install
@@ -15,35 +12,38 @@ npm run typecheck
 npm run build      # static export
 ```
 
-The chat needs the backend (see `../README.md`). `npm run dev` alone renders the
-document but cannot hold a conversation.
+The chat and the agreement text both need the backend (see `../README.md`).
+`npm run dev` alone will render, but it cannot hold a conversation.
 
-## How it works
+## Two kinds of document
 
-The template text is bundled at build time and the document is rendered from
-React state. The conversation and the document values are sent to the backend on
-each turn, which is what the model reads to decide its next question.
+The Mutual NDA is drafted by hand. It has a real cover page in the dataset, and
+its options are choices rather than free text ("expires in N years" or "continues
+until terminated"), so it has its own values (`lib/nda.ts`) and its own renderer
+(`components/NdaDocument.tsx`).
 
-- `src/lib/nda.ts` — the cover-page values, how they read in the document, and
-  how an AI patch merges into them.
-- `src/lib/standard-terms.ts` — the Standard Terms, transcribed verbatim.
+The other ten are standard terms that name the values they need. The backend
+derives those fields from the template and parses the text into lines, so they
+share one renderer (`components/TemplateDocument.tsx`) driven by a flat map of
+field name to value (`lib/documents.ts`). Their cover page does not exist in the
+dataset — we generate it from what the assistant collected.
+
+`lib/useDocument.ts` holds whichever of the two is on the desk.
+
+- `src/lib/nda.ts` — the NDA's values, and how an AI patch merges into them.
+- `src/lib/documents.ts` — every other agreement's values.
+- `src/lib/standard-terms.ts` — the NDA Standard Terms, transcribed verbatim.
 - `src/components/ChatPanel.tsx` — the interview.
-- `src/components/NdaDocument.tsx` — the document.
 
-The Standard Terms mark every reference back to the cover page with
-`<span class="coverpage_link">`. Those become `{ ref }` segments here, which is
-what lets the app light up the clauses a value lands in the moment the assistant
-fills it in. A cover-page value nobody has supplied renders as a red blank, so an
-unfinished agreement looks unfinished.
-
-Cross-references show the defined term ("Governing Law"), not the value.
-Substituting the text inline would break the sentence, and is not how the
-agreement is written.
+In both documents, a term in the standard terms shows its **name**, not its
+value, and cross-references the cover page — substituting the text inline would
+break the sentence, and is not how these agreements are written. A value nobody
+has supplied renders as a red blank, so an unfinished agreement looks unfinished.
 
 ## Downloading
 
-Printing is the download: a print stylesheet drops the interface, unwinds the
-app shell, and hands the page to `@page` at US Letter. The signature block and
-each clause are kept off page boundaries, and the highlighting does not print.
+Printing is the download: a print stylesheet drops the interface, unwinds the app
+shell, and hands the page to `@page` at US Letter. The signature block and each
+clause are kept off page boundaries, and the highlighting does not print.
 
-The Common Paper Mutual NDA (Version 1.0) is free to use under CC BY 4.0.
+The Common Paper templates are free to use under CC BY 4.0.

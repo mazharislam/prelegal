@@ -84,9 +84,15 @@ The prototype's NDA screens use a dark "desk" palette (see `frontend/src/app/glo
 - Inference is the local `claude` CLI, called as a subprocess with `--json-schema` structured output, per the claudecoder skill. No API key, no SDK.
 - **AI chat does not work inside Docker.** The CLI is installed and signed in on the developer's machine, not in the image, so `/api/chat` returns a 503 explaining exactly that. For chat, run the backend on the host. Everything else works in the container as before.
 
+### Completed (PL-6)
+
+- All 11 agreements in `catalog.json` can be drafted, not just the NDA. The assistant works out which one the user needs, and says so.
+- Asked for an agreement we have no template for, it declines, names the closest one it *can* draft and why, and offers to go ahead with that — it never quietly drafts something else.
+- Fields are **derived from the templates**, not hand-listed: each Common Paper template marks the values it needs with `coverpage_link` / `keyterms_link` / `orderform_link` spans, and `app/templates.py` reads them. This reproduces the NDA's six known fields exactly, which is the check the approach rests on.
+- Two rendering paths, on purpose. The Mutual NDA keeps its bespoke document (cover page, checkbox options, transcribed clauses). The other ten share one data-driven renderer: a cover page generated from the collected values, then the standard terms, with each referenced term cross-referencing the cover page.
+
 ### Not yet built
 
-- **PL-6** — support for all 11 document types in `catalog.json`.
 - **PL-7** — real sign-up/sign-in, document persistence and history, and the visual polish pass.
 
 ## Current API endpoints
@@ -97,7 +103,9 @@ The prototype's NDA screens use a dark "desk" palette (see `frontend/src/app/glo
 | `POST /api/auth/login` | Fake sign-in; creates the user on first sight |
 | `POST /api/auth/logout` | Clear the session cookie |
 | `GET /api/auth/me` | The signed-in user, or 401 |
-| `POST /api/chat` | One turn of the NDA interview: conversation in, reply plus a field patch out |
+| `POST /api/chat` | One turn of the interview: conversation in, reply plus a field patch out |
+| `GET /api/documents` | The 11 agreements we can draft, and the values each needs |
+| `GET /api/documents/{id}/template` | One agreement's text, parsed into lines |
 
 ## Implementation notes
 
@@ -107,8 +115,10 @@ The prototype's NDA screens use a dark "desk" palette (see `frontend/src/app/glo
 |---|---|
 | `backend/app/main.py` | App, lifespan (recreates the DB), CORS, `/api/health` |
 | `backend/app/ai.py` | The `claude` CLI subprocess call (structured output) |
-| `backend/app/nda.py` | The NDA field model and the AI's response schema |
-| `backend/app/routes/chat.py` | `/api/chat`: the interview prompt and one turn |
+| `backend/app/templates.py` | Parses the templates; derives each agreement's fields |
+| `backend/app/nda.py` | The NDA's hand-written field model |
+| `backend/app/routes/chat.py` | `/api/chat`: the prompt, the per-turn schema, one turn |
+| `backend/app/routes/documents.py` | `/api/documents`: what we can draft, and its text |
 | `backend/app/config.py` | Paths read lazily from the environment, so tests can redirect them |
 | `backend/app/database.py` | Plain `sqlite3`; one table, so no ORM |
 | `backend/app/dependencies.py` | `get_db` (one connection per request), `get_current_user` (cookie) |
@@ -116,9 +126,12 @@ The prototype's NDA screens use a dark "desk" palette (see `frontend/src/app/glo
 | `backend/app/routes/auth.py` | The fake login |
 | `backend/app/routes/static.py` | Mounts the frontend export at `/` |
 | `frontend/src/lib/api.ts` | API client; `ApiError` carries the HTTP status |
-| `frontend/src/lib/nda.ts` | The document values, how they read, and `applyUpdates` |
+| `frontend/src/lib/nda.ts` | The NDA's values, how they read, and `applyUpdates` |
+| `frontend/src/lib/documents.ts` | Every other agreement: a flat field map and its merge |
+| `frontend/src/lib/useDocument.ts` | Which agreement is on the desk, and its values |
 | `frontend/src/components/ChatPanel.tsx` | The interview |
-| `frontend/src/components/NdaDocument.tsx` | The rendered agreement, and the PDF via print |
+| `frontend/src/components/NdaDocument.tsx` | The NDA, drafted by hand |
+| `frontend/src/components/TemplateDocument.tsx` | The other ten, rendered from the template |
 | `frontend/src/components/LoginScreen.tsx` | The login screen |
 | `frontend/src/app/page.tsx` | Session gate; the chat and the document side by side |
 
@@ -131,7 +144,11 @@ The prototype's NDA screens use a dark "desk" palette (see `frontend/src/app/glo
 - **Two origins in development.** `next dev` on `:3000` sets `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`; the container leaves it empty and is same-origin. `credentials: "include"` is what carries the cookie across the dev origin, and `DEV_ORIGINS` in `config.py` is what CORS allows.
 - **The AI answers with a patch, never the whole document.** `NdaUpdates` carries only the fields it learned this turn, and `applyUpdates` in `nda.ts` merges them. A model asked to restate every value each turn is a model that can silently overwrite one the user already settled. Keep it that way.
 - **Inference needs the host.** `app/ai.py` shells out to `claude`. Tests always mock the subprocess: the suite must never depend on a signed-in CLI or spend a live model call.
-- **The field model is written twice**, in `backend/app/nda.py` and `frontend/src/lib/nda.ts`. There is no shared codegen, so a field added to one and not the other is silently dropped in the merge. Change both, and add it to the prompt in `routes/chat.py` — a field absent from the prompt is a field the AI never fills.
+- **The NDA field model is written twice**, in `backend/app/nda.py` and `frontend/src/lib/nda.ts`. There is no shared codegen, so a field added to one and not the other is silently dropped in the merge. This applies to the NDA only: the other ten agreements derive their fields from the template, so there is nothing to keep in step.
+- **The chat schema is built per turn**, from the agreement in play (`response_schema` in `routes/chat.py`). A schema carrying only that document's fields is what stops the model inventing them. Two consequences worth knowing:
+  - **`$ref`s must be hoisted.** The NDA nests a party, which Pydantic writes as `$ref` into `$defs`. A `$ref` resolves from the *root* of the schema sent to the CLI, so those defs are lifted out of `updates`. Leave them buried and the CLI rejects the whole schema and the NDA simply will not draft. Mocked tests cannot catch this — only the real CLI resolves refs.
+  - **The turn that chooses an agreement is asked twice.** The first ask is answered with a schema that has no fields, because we did not yet know the document. Without the re-ask, "a CSA for Acme, 12 months" would be acknowledged in the reply and then silently dropped.
+- **Templates ship in the image.** `.dockerignore` deliberately does not exclude `templates/` or `catalog.json`: the backend cannot ask for a value it does not know the document needs.
 
 ### Commands
 

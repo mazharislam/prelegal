@@ -8,6 +8,11 @@
  * cookie in that cross-origin case.
  */
 
+import type {
+  DocumentSummary,
+  DocumentTemplate,
+  FieldValues,
+} from "@/lib/documents";
 import type { NdaUpdates, NdaValues } from "@/lib/nda";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
@@ -67,23 +72,51 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface Unsupported {
+  requested: string;
+  closest: string | null;
+}
+
 export interface ChatReply {
   reply: string;
-  updates: NdaUpdates;
+  /**
+   * The NDA answers with a typed patch; every other agreement with a field map.
+   * It is one or the other, never both — `documentType` says which, and the two
+   * shapes are not interchangeable (the NDA nests a party; a field map cannot).
+   */
+  updates: NdaUpdates | FieldValues;
+  /** The agreement the assistant has settled on, or null while it is still asking. */
+  documentType: string | null;
+  /** Set when the user asked for an agreement we have no template for. */
+  unsupported: Unsupported | null;
 }
 
 /**
- * One turn of the NDA interview. The whole conversation and the document so far
- * go up; a reply and a patch of newly-learned fields come back.
+ * One turn of the interview. The conversation, the document so far, and which
+ * agreement is on the table all go up; a reply and a patch come back.
+ *
+ * `documentType` is what tells the backend which schema to hand the model, so
+ * the patch always belongs to the agreement actually being drafted.
  */
 export function sendChat(
   messages: ChatMessage[],
-  values: NdaValues,
+  values: NdaValues | FieldValues,
+  documentType: string | null,
 ): Promise<ChatReply> {
   return request<ChatReply>("/api/chat", {
     method: "POST",
-    body: JSON.stringify({ messages, values }),
+    body: JSON.stringify({ messages, values, documentType }),
   });
+}
+
+/** Every agreement we can draft. */
+export function fetchDocumentTypes(): Promise<DocumentSummary[]> {
+  return request<DocumentSummary[]>("/api/documents");
+}
+
+/** The text of one agreement, parsed into lines a renderer can lay out. */
+export function fetchTemplate(documentId: string): Promise<DocumentTemplate> {
+  return request<DocumentTemplate>(`/api/documents/${documentId}/template`);
 }
 
 /** The signed-in user, or null when there is no session. */

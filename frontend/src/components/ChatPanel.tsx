@@ -2,21 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { ApiError, type ChatMessage, sendChat } from "@/lib/api";
-import type { NdaUpdates, NdaValues } from "@/lib/nda";
+import { ApiError, type ChatMessage, type ChatReply, sendChat } from "@/lib/api";
+import type { FieldValues } from "@/lib/documents";
+import type { NdaValues } from "@/lib/nda";
 
 /* Written here rather than fetched: the opening question never varies, and
  * spending a model call — and eight seconds — to say hello is a poor trade. */
 const GREETING =
-  "I can put together a Mutual NDA with you. Tell me who the two parties are, " +
-  "or just describe the deal and we will work through the rest together.";
+  "I can draft a legal agreement with you — an NDA, a cloud service agreement, " +
+  "a pilot, a DPA, and a few others. Tell me what you need, or just describe " +
+  "the deal and we will work out which agreement fits.";
 
 interface ChatPanelProps {
-  values: NdaValues;
-  onUpdates: (updates: NdaUpdates) => void;
+  values: NdaValues | FieldValues;
+  documentType: string | null;
+  onReply: (reply: ChatReply) => void;
 }
 
-export function ChatPanel({ values, onUpdates }: ChatPanelProps) {
+export function ChatPanel({ values, documentType, onReply }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -40,9 +43,9 @@ export function ChatPanel({ values, onUpdates }: ChatPanelProps) {
     setThinking(true);
 
     try {
-      const { reply, updates } = await sendChat(history, values);
-      setMessages([...history, { role: "assistant", content: reply }]);
-      onUpdates(updates);
+      const reply = await sendChat(history, values, documentType);
+      setMessages([...history, { role: "assistant", content: reply.reply }]);
+      onReply(reply);
     } catch (caught) {
       setError(
         caught instanceof ApiError
