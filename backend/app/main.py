@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import DEV_ORIGINS
 from app.database import init_db
-from app.routes import auth, chat
+from app.routes import auth, chat, documents
 from app.routes.static import mount_frontend
 
 
@@ -37,6 +37,7 @@ def health():
 
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(documents.router)
 
 # Last: this claims "/", so every API route must already be registered.
 mount_frontend(app)

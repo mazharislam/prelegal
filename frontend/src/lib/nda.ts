@@ -167,6 +167,8 @@ export interface NdaUpdates {
   party2?: Partial<Party> | null;
 }
 
+/* The same rule as every other agreement's fields — add and change, never blank
+ * out — but over a named shape rather than an open map. See `mergeFields`. */
 function mergeParty(party: Party, update: Partial<Party> | null | undefined): Party {
   if (!update) return party;
   const merged = { ...party };

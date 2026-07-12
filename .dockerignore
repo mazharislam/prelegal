@@ -10,5 +10,6 @@
 .git
 .github
 docs
-templates
-*.md
+# templates/ and catalog.json ship in the image: the backend reads them to know
+# which agreements it can draft and what each one needs to ask for.
+

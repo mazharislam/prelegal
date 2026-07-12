@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ApiError,
   type ChatMessage,
+  fetchDocumentTypes,
   fetchSession,
+  fetchTemplate,
   login,
   logout,
   sendChat,
@@ -77,26 +79,59 @@ describe("fetchSession", () => {
 });
 
 describe("sendChat", () => {
-  it("posts the conversation and the document, and returns the patch", async () => {
-    const answer = { reply: "Got it.", updates: { governingLaw: "Delaware" } };
+  it("posts the conversation, the document, and which agreement is in play", async () => {
+    const answer = {
+      reply: "Got it.",
+      updates: { governingLaw: "Delaware" },
+      documentType: "mutual-nda",
+      unsupported: null,
+    };
     const fetchMock = mockFetch({ json: async () => answer });
     const messages: ChatMessage[] = [{ role: "user", content: "Delaware law" }];
 
-    await expect(sendChat(messages, DEFAULT_VALUES)).resolves.toEqual(answer);
+    await expect(
+      sendChat(messages, DEFAULT_VALUES, "mutual-nda"),
+    ).resolves.toEqual(answer);
 
     const [path, init] = fetchMock.mock.calls[0];
     expect(path).toBe("/api/chat");
     expect(init.method).toBe("POST");
+    // documentType is what picks the schema the model is given, so it must go up.
     expect(JSON.parse(init.body)).toEqual({
       messages,
       values: DEFAULT_VALUES,
+      documentType: "mutual-nda",
     });
   });
 
   it("surfaces a backend without the claude CLI", async () => {
     mockFetch({ ok: false, status: 503 });
 
-    await expect(sendChat([], DEFAULT_VALUES)).rejects.toMatchObject({ status: 503 });
+    await expect(sendChat([], DEFAULT_VALUES, null)).rejects.toMatchObject({
+      status: 503,
+    });
+  });
+});
+
+describe("fetchDocumentTypes", () => {
+  it("lists the agreements we can draft", async () => {
+    const documents = [
+      { id: "csa", name: "Cloud Service Agreement", description: "", fields: [] },
+    ];
+    const fetchMock = mockFetch({ json: async () => documents });
+
+    await expect(fetchDocumentTypes()).resolves.toEqual(documents);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/documents");
+  });
+});
+
+describe("fetchTemplate", () => {
+  it("fetches one agreement's text", async () => {
+    const fetchMock = mockFetch({ json: async () => ({ id: "sla" }) });
+
+    await fetchTemplate("sla");
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/documents/sla/template");
   });
 });
 
