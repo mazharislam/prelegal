@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyUpdates,
   DEFAULT_VALUES,
+  describeMndaTerm,
   documentFileName,
   formatEffectiveDate,
   missingFields,
   type NdaValues,
   resolveField,
+  updatedCoverPageFields,
 } from "./nda";
-import { clausesReferencing, STANDARD_TERMS } from "./standard-terms";
+import { STANDARD_TERMS } from "./standard-terms";
 
 const values = (overrides: Partial<NdaValues> = {}): NdaValues => ({
   ...DEFAULT_VALUES,
@@ -101,11 +104,98 @@ describe("standard terms", () => {
   it("transcribes all eleven clauses", () => {
     expect(STANDARD_TERMS).toHaveLength(11);
   });
+});
 
-  it("knows which clauses a cover-page value governs", () => {
-    // The Purpose limits both the disclosure (§1) and the permitted use (§2).
-    expect(clausesReferencing("purpose")).toEqual([1, 2]);
-    expect(clausesReferencing("governingLaw")).toEqual([9]);
-    expect(clausesReferencing("effectiveDate")).toEqual([5]);
+describe("applyUpdates", () => {
+  it("fills in the fields the AI learned", () => {
+    const merged = applyUpdates(values(), {
+      governingLaw: "Delaware",
+      jurisdiction: "Wilmington, Delaware",
+    });
+
+    expect(merged.governingLaw).toBe("Delaware");
+    expect(merged.jurisdiction).toBe("Wilmington, Delaware");
+  });
+
+  it("merges a party without dropping the details already gathered", () => {
+    const current = values({
+      party1: {
+        company: "Acme",
+        signatoryName: "Ada",
+        title: "CEO",
+        noticeAddress: "",
+      },
+    });
+
+    const merged = applyUpdates(current, {
+      party1: { noticeAddress: "1 Main St" },
+    });
+
+    expect(merged.party1).toEqual({
+      company: "Acme",
+      signatoryName: "Ada",
+      title: "CEO",
+      noticeAddress: "1 Main St",
+    });
+  });
+
+  it("leaves a settled value alone when the patch omits it", () => {
+    const current = values({ governingLaw: "Delaware" });
+
+    const merged = applyUpdates(current, { jurisdiction: "Wilmington" });
+
+    expect(merged.governingLaw).toBe("Delaware");
+  });
+
+  it("cannot blank out a value the user already gave", () => {
+    // A patch adds and changes; it never erases. A null from the model for an
+    // untouched field must not wipe the answer behind it.
+    const current = values({ governingLaw: "Delaware" });
+
+    const merged = applyUpdates(current, {
+      governingLaw: null,
+      party1: null,
+    });
+
+    expect(merged.governingLaw).toBe("Delaware");
+    expect(merged.party1).toEqual(current.party1);
+  });
+
+  it("records a change to the standard terms", () => {
+    // Nothing else can set this now the form is gone, so the AI is the only way
+    // the modifications section ever says anything but "None."
+    const merged = applyUpdates(values(), {
+      modifications: "Section 5 term extended to 3 years.",
+    });
+
+    expect(merged.modifications).toBe("Section 5 term extended to 3 years.");
+  });
+
+  it("switches the term to run until terminated", () => {
+    const merged = applyUpdates(values(), { mndaTermKind: "untilTerminated" });
+
+    expect(describeMndaTerm(merged)).toBe(
+      "until terminated in accordance with the terms of the MNDA",
+    );
+  });
+});
+
+describe("updatedCoverPageFields", () => {
+  it("names the cover-page fields a patch touched", () => {
+    expect(
+      updatedCoverPageFields({ governingLaw: "Delaware", purpose: "Evaluating" }),
+    ).toEqual(["purpose", "governingLaw"]);
+  });
+
+  it("maps either half of the term onto the field the document shows", () => {
+    expect(updatedCoverPageFields({ mndaTermYears: "2" })).toEqual(["mndaTerm"]);
+    expect(updatedCoverPageFields({ confidentialityKind: "inPerpetuity" })).toEqual([
+      "termOfConfidentiality",
+    ]);
+  });
+
+  it("names nothing when the AI only filled in a party", () => {
+    // Party details are not cover-page fields, so there is nothing to light up.
+    expect(updatedCoverPageFields({ party1: { company: "Acme" } })).toEqual([]);
   });
 });

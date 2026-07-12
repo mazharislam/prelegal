@@ -78,9 +78,14 @@ The prototype's NDA screens use a dark "desk" palette (see `frontend/src/app/glo
 - Fake sign-in: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`. There is **no authentication** — an email identifies a user, the account is created on first sight, and the session cookie carries a bare user id. Real credentials arrive with PL-7.
 - Start/stop scripts for Mac, Linux, and Windows.
 
+### Completed (PL-5)
+
+- AI chat replaces the NDA form. The user talks; the model asks for one missing field at a time and returns a patch of what it learned, which the frontend merges into the document. The live preview and PDF download are unchanged.
+- Inference is the local `claude` CLI, called as a subprocess with `--json-schema` structured output, per the claudecoder skill. No API key, no SDK.
+- **AI chat does not work inside Docker.** The CLI is installed and signed in on the developer's machine, not in the image, so `/api/chat` returns a 503 explaining exactly that. For chat, run the backend on the host. Everything else works in the container as before.
+
 ### Not yet built
 
-- **PL-5** — AI chat replacing the manual NDA form.
 - **PL-6** — support for all 11 document types in `catalog.json`.
 - **PL-7** — real sign-up/sign-in, document persistence and history, and the visual polish pass.
 
@@ -92,6 +97,7 @@ The prototype's NDA screens use a dark "desk" palette (see `frontend/src/app/glo
 | `POST /api/auth/login` | Fake sign-in; creates the user on first sight |
 | `POST /api/auth/logout` | Clear the session cookie |
 | `GET /api/auth/me` | The signed-in user, or 401 |
+| `POST /api/chat` | One turn of the NDA interview: conversation in, reply plus a field patch out |
 
 ## Implementation notes
 
@@ -100,6 +106,9 @@ The prototype's NDA screens use a dark "desk" palette (see `frontend/src/app/glo
 | Path | What |
 |---|---|
 | `backend/app/main.py` | App, lifespan (recreates the DB), CORS, `/api/health` |
+| `backend/app/ai.py` | The `claude` CLI subprocess call (structured output) |
+| `backend/app/nda.py` | The NDA field model and the AI's response schema |
+| `backend/app/routes/chat.py` | `/api/chat`: the interview prompt and one turn |
 | `backend/app/config.py` | Paths read lazily from the environment, so tests can redirect them |
 | `backend/app/database.py` | Plain `sqlite3`; one table, so no ORM |
 | `backend/app/dependencies.py` | `get_db` (one connection per request), `get_current_user` (cookie) |
@@ -116,12 +125,14 @@ The prototype's NDA screens use a dark "desk" palette (see `frontend/src/app/glo
 - **The database is disposable.** `init_db()` deletes the file and recreates the schema on every start. Do not add anything that assumes data survives a restart until PL-7.
 - **The frontend is a static export.** There is no Node runtime in the image and no Next.js server, so no server components, route handlers, or SSR. Everything is client-side.
 - **Two origins in development.** `next dev` on `:3000` sets `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`; the container leaves it empty and is same-origin. `credentials: "include"` is what carries the cookie across the dev origin, and `DEV_ORIGINS` in `config.py` is what CORS allows.
+- **The AI answers with a patch, never the whole document.** `NdaUpdates` carries only the fields it learned this turn, and `applyUpdates` in `nda.ts` merges them. A model asked to restate every value each turn is a model that can silently overwrite one the user already settled. Keep it that way.
+- **Inference needs the host.** `app/ai.py` shells out to `claude`. Tests always mock the subprocess: the suite must never depend on a signed-in CLI or spend a live model call.
 
 ### Commands
 
 ```bash
-cd backend  && uv run pytest              # 10 tests
-cd frontend && npm test                   # 25 tests (vitest)
+cd backend  && uv run pytest              # API, database, and the mocked AI chat
+cd frontend && npm test                   # vitest: components and pure logic
 cd frontend && npm run lint && npm run typecheck && npm run build
 ```
 

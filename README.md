@@ -1,6 +1,22 @@
 # Prelegal
 
-Draft legal agreements from the Common Paper templates in `templates/`.
+Draft legal agreements from the Common Paper templates in `templates/`. Tell the
+assistant about your deal and it fills in the document as you talk.
+
+## AI chat needs the backend on your host
+
+Inference goes through the local Claude Code CLI, which the backend calls as a
+subprocess. There is no API key. That CLI lives on your machine, not in the
+container, so **AI chat does not work inside Docker** — `/api/chat` returns a 503
+saying so. Everything else (the app, sign-in, the document, the PDF) works in the
+container either way.
+
+To use the chat, install and sign in to Claude Code, then run the backend on the
+host — see [Develop](#develop) below.
+
+```bash
+claude auth status --text     # should show your account
+```
 
 ## Run it
 
@@ -23,7 +39,15 @@ container starts, so users do not survive a restart.
 
 ## Develop
 
-The frontend and backend can also run separately, on two ports.
+Run the backend on the host and it can reach the `claude` CLI, so AI chat works.
+
+```bash
+# Build the frontend once, then let the backend serve it on http://localhost:8000
+cd frontend && npm run build
+cd ../backend && PRELEGAL_STATIC_DIR=../frontend/out uv run uvicorn app.main:app --reload
+```
+
+Or run the two separately, on two ports, for frontend hot reload:
 
 ```bash
 # Backend on http://localhost:8000

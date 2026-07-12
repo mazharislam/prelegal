@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, fetchSession, login, logout } from "./api";
+import {
+  ApiError,
+  type ChatMessage,
+  fetchSession,
+  login,
+  logout,
+  sendChat,
+} from "./api";
+import { DEFAULT_VALUES } from "./nda";
 
 function mockFetch(response: Partial<Response> & { json?: () => unknown }) {
   const fetchMock = vi.fn().mockResolvedValue({
@@ -65,6 +73,30 @@ describe("fetchSession", () => {
     mockFetch({ ok: false, status: 500 });
 
     await expect(fetchSession()).rejects.toThrow(ApiError);
+  });
+});
+
+describe("sendChat", () => {
+  it("posts the conversation and the document, and returns the patch", async () => {
+    const answer = { reply: "Got it.", updates: { governingLaw: "Delaware" } };
+    const fetchMock = mockFetch({ json: async () => answer });
+    const messages: ChatMessage[] = [{ role: "user", content: "Delaware law" }];
+
+    await expect(sendChat(messages, DEFAULT_VALUES)).resolves.toEqual(answer);
+
+    const [path, init] = fetchMock.mock.calls[0];
+    expect(path).toBe("/api/chat");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({
+      messages,
+      values: DEFAULT_VALUES,
+    });
+  });
+
+  it("surfaces a backend without the claude CLI", async () => {
+    mockFetch({ ok: false, status: 503 });
+
+    await expect(sendChat([], DEFAULT_VALUES)).rejects.toMatchObject({ status: 503 });
   });
 });
 
