@@ -8,7 +8,10 @@ export default defineConfig({
     },
   },
   test: {
+    /* Logic tests need nothing more than node. Component tests opt into a DOM
+     * with a `@vitest-environment jsdom` docblock. */
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
+    setupFiles: ["./vitest.setup.ts"],
   },
 });

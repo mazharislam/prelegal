@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { LoginScreen } from "@/components/LoginScreen";
 import { NdaDocument } from "@/components/NdaDocument";
 import { NdaForm } from "@/components/NdaForm";
+import { fetchSession, logout, type User } from "@/lib/api";
 import {
   COVER_PAGE_FIELD_LABELS,
   DEFAULT_VALUES,
@@ -12,7 +14,40 @@ import {
   missingFields,
 } from "@/lib/nda";
 
+/**
+ * The session gate. A signed-out visitor gets the login screen; everyone else
+ * gets the NDA desk. The session lives on the server behind a cookie, so a
+ * reload resumes it — hence the check before the first paint.
+ */
 export default function Page() {
+  const [user, setUser] = useState<User | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    fetchSession()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setCheckingSession(false));
+  }, []);
+
+  if (checkingSession) {
+    return <main className="min-h-screen bg-desk" />;
+  }
+
+  if (!user) {
+    return <LoginScreen onSignedIn={setUser} />;
+  }
+
+  return <NdaDesk user={user} onSignedOut={() => setUser(null)} />;
+}
+
+function NdaDesk({
+  user,
+  onSignedOut,
+}: {
+  user: User;
+  onSignedOut: () => void;
+}) {
   const [values, setValues] = useState(DEFAULT_VALUES);
   const [activeField, setActiveField] = useState<CoverPageField | null>(null);
 
@@ -34,13 +69,19 @@ export default function Page() {
     <div className="app-shell flex min-h-screen flex-col lg:h-screen lg:flex-row">
       <header className="no-print flex items-center justify-between gap-4 border-b border-desk-line bg-desk-raised px-5 py-3 lg:hidden">
         <Wordmark />
-        <DownloadButton blanks={blanks.length} onClick={downloadPdf} />
+        <div className="flex items-center gap-3">
+          <SignOutButton onSignedOut={onSignedOut} />
+          <DownloadButton blanks={blanks.length} onClick={downloadPdf} />
+        </div>
       </header>
 
       {/* The desk: everything the user can change. */}
       <div className="no-print flex flex-col border-desk-line bg-desk-raised lg:w-[440px] lg:shrink-0 lg:overflow-y-auto lg:border-r xl:w-[480px]">
         <div className="hidden px-7 pt-7 lg:block">
-          <Wordmark />
+          <div className="flex items-start justify-between gap-4">
+            <Wordmark />
+            <SignedInAs user={user} onSignedOut={onSignedOut} />
+          </div>
         </div>
 
         <div className="px-5 py-6 lg:px-7">
@@ -66,6 +107,51 @@ export default function Page() {
         <NdaDocument values={values} activeField={activeField} />
       </main>
     </div>
+  );
+}
+
+function SignedInAs({
+  user,
+  onSignedOut,
+}: {
+  user: User;
+  onSignedOut: () => void;
+}) {
+  return (
+    <div className="shrink-0 text-right">
+      <p className="max-w-[150px] truncate text-[12px] text-chalk-soft">
+        {user.email}
+      </p>
+      <SignOutButton onSignedOut={onSignedOut} className="mt-0.5" />
+    </div>
+  );
+}
+
+function SignOutButton({
+  onSignedOut,
+  className = "",
+}: {
+  onSignedOut: () => void;
+  className?: string;
+}) {
+  const signOut = async () => {
+    try {
+      await logout();
+    } catch {
+      /* The cookie is the server's to forget, but a failed request is no reason
+       * to strand the user in a session they asked to leave. */
+    }
+    onSignedOut();
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={signOut}
+      className={`font-[family-name:var(--font-utility)] text-[11px] tracking-[0.08em] text-chalk-soft uppercase transition-colors hover:text-chalk ${className}`}
+    >
+      Sign out
+    </button>
   );
 }
 
